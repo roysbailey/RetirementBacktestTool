@@ -1,0 +1,61 @@
+﻿{
+  "SimulationStartYear": 1973,
+  "Sipp1StartingBalance": 600000.00,
+  "Sipp2StartingBalance": 400000.00,
+
+  "SpendPlanFile": ".\\data\\sipp-spend-plan.csv",
+  "MarketReturnsFile": ".\\data\\market-returns.csv",
+
+  "LiabilityDiscountRate": 0.01,
+
+  "Guardrails": {
+    "Tier4Threshold": 0.70,
+    "Tier3Threshold": 0.80,
+    "Tier2Threshold": 0.90,
+    "Tier1Threshold": 1.00
+  },
+
+  "Bonus": {
+    "StartThreshold": 1.10,
+    "Tier2Threshold": 1.20,
+    "Tier3Threshold": 1.30,
+    "Tier4Threshold": 1.40,
+    "Tier5Threshold": 1.50,
+
+    "PctTier1": 0.02,
+    "PctTier2": 0.03,
+    "PctTier3": 0.04,
+    "PctTier4": 0.05,
+    "PctTier5": 0.06
+  },
+
+  "Momentum": {
+    "CashBufferYearsHighHealth": 3,
+    "CashBufferYearsLowHealth": 1,
+    "CashBufferHealthThreshold": 1.20
+  },
+
+  "TimeBuckets": {
+    "Bucket1Years": 4,
+    "Bucket2Years": 8,
+
+    "FundingStateExtremeBadThreshold": 0.80,
+    "FundingStateBadThreshold": 0.90,
+    "FundingStateGoodThreshold": 1.10
+  },
+
+  "Hybrid": {
+    "AllocationB2": 0.40,
+    "AllocationB3": 0.60,
+
+    "B2HealthGoodThreshold": 1.00,
+    "B3HealthGoodThreshold": 1.00,
+
+    "B2HealthDiscountAdjustment": -0.01,
+    "B3HealthDiscountAdjustment": -0.03,
+
+    "DriftTolerance": 0.05,
+    "EquitySellThreshold": 0.00,
+    "BondSellThreshold": 0.00
+  }
+}

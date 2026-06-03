@@ -1,0 +1,100 @@
+# Visual Studio / .NET common ignores
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+out/
+artifacts/
+publish/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+*.DotSettings.user
+_ReSharper*/
+*.___jb_old___
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# Runtime / publish outputs
+*.exe
+*.dll
+*.pdb
+*.app
+*.apk
+
+# Rider / VS caches
+*.ide.*
+
+# Test results / coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+
+# ASP.NET / app settings (ignore local secrets; keep repository config.json)
+secrets.json
+local.settings.json
+appsettings.*.Local.json
+
+# Entity Framework / DB artifacts
+*.mdf
+*.ldf
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.dbmdl
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# User-specific files
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Editor directories
+.vscode/
+.vs/
+
+# Tooling
+.nuget/
+.dotnet/
+tools/
+node_modules/
+
+# Coverage & profiling
+coverage/
+*.prof
+*.trace
+
+# Ignore JetBrains Rider caches
+.idea/
+*.iws
+*.iml
+
+# Optional: user-specific VS Code workspace settings
+*.code-workspace
+
+# Keep data and config files (e.g. Data/*, config.json) under source control by not adding generic CSV/JSON patterns here.
+*master.json
+*master.csv

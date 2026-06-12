@@ -7,6 +7,8 @@ public class Config
     public string MarketReturnsFile { get; set; }
     public double LiabilityDiscountRate { get; set; }
     public int SimulationStartYear { get; set; }
+ 
+    public BucketReturnsConfig BucketReturns { get; set; } = new();
 
     // Shared guardrail + bonus thresholds
     public GuardrailConfig Guardrails { get; set; } = new();

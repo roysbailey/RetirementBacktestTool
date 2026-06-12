@@ -19,7 +19,7 @@ public class ThreeTimeBucketEngine : EngineBase, ISimulationEngine
 
     public SimulationResult Run(
         List<PlanRow> plan,
-        List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> marketReturns,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
         Config config,
         bool verbose,
         double csvS1Total,
@@ -142,10 +142,8 @@ public class ThreeTimeBucketEngine : EngineBase, ISimulationEngine
             var notes = new List<string>();
 
             var row = plan[yearIndex];
-            var r = usableReturns[yearIndex];
-
-            double rBond = r.GlobalBonds_realReturn;
-            double rEquity = r.GlobalTracker_realReturn;
+            double rBond = GetBucket2FundReturn(usableReturns[yearIndex]);
+            double rEquity = GetBucket3FundReturn(usableReturns[yearIndex]);
 
             // Capture the bucket balances at start of year (for debug)
             double s1B1StartOfYear = s1B1;
@@ -453,7 +451,7 @@ public class ThreeTimeBucketEngine : EngineBase, ISimulationEngine
                 double s2Remain = s2B1 + s2B2 + s2B3;
 
                 string notesJoined = string.Join(";", notes);   // ★ NEW
-                var displayYear = $"{row.Year,4} ({r.Year})";
+                var displayYear = $"{row.Year,4} ({usableReturns[yearIndex].Year})";
 
                 Console.WriteLine(
                     $"{displayYear} | {rBond,6:P2} | {rEquity,6:P2} | " +

@@ -11,9 +11,10 @@ public class Hybrid3BucketEngine : EngineBase, ISimulationEngine
     private const string EngineDescription =
         "Hybrid 3 Bucket Engine (B1 time-based, B2/B3 allocation-based, Momentum guardrails + bonus)";
 
+
     public SimulationResult Run(
         List<PlanRow> plan,
-        List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> marketReturns,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
         Config config,
         bool verbose,
         double csvS1Total,
@@ -151,10 +152,6 @@ public class Hybrid3BucketEngine : EngineBase, ISimulationEngine
             var p = plan[yearIndex];
             double s1Spend = p.S1Spend;
             double s2Spend = p.S2Spend;
-
-            // === Extract market returns ===
-            double rBond = marketReturns[yearIndex].GlobalBonds_realReturn;
-            double rEquity = marketReturns[yearIndex].GlobalTracker_realReturn;
 
             // === Shortcuts to config ===
             var hcfg = config.Hybrid;
@@ -318,7 +315,7 @@ public class Hybrid3BucketEngine : EngineBase, ISimulationEngine
 
             // --- Previous return (Momentum uses equity return) ---
             double prevReturn = (yearIndex > 0)
-                ? marketReturns[yearIndex - 1].GlobalTracker_realReturn
+                ? GetBucket3FundReturn(marketReturns[yearIndex - 1])
                 : 0;
 
             // per‑year cuts
@@ -534,8 +531,8 @@ public class Hybrid3BucketEngine : EngineBase, ISimulationEngine
             // --- Momentum-based refill decision (shared logic with Momentum engine, but different input metric: blended market return) ---
             (double S1B1_RefillFromB2, double S1B1_RefillFromB3) S1_Refill = (0, 0);
             (double S2B1_RefillFromB2, double S2B1_RefillFromB3) S2_Refill = (0, 0);
-            double latestAppliedGlobalBondReturn = (yearIndex == 0) ? 0.02 : marketReturns[yearIndex-1].GlobalBonds_realReturn;
-            double latestAppliedGlobalTrackerReturn = (yearIndex == 0) ? 0.01 : marketReturns[yearIndex-1].GlobalTracker_realReturn;
+            double latestAppliedGlobalBondReturn = (yearIndex == 0) ? 0.01 : GetBucket2FundReturn(marketReturns[yearIndex - 1]);
+            double latestAppliedGlobalTrackerReturn = (yearIndex == 0) ? 0.01 : GetBucket3FundReturn(marketReturns[yearIndex-1]);
             if (_strategy.ShouldRefill(latestAppliedGlobalBondReturn * config.Hybrid.AllocationB2 + latestAppliedGlobalTrackerReturn * config.Hybrid.AllocationB3))
             {
                 // --- S1: compute exactly what to refill ---
@@ -632,6 +629,10 @@ public class Hybrid3BucketEngine : EngineBase, ISimulationEngine
             // --------------------------------------------------------
             // BLOCK G — APPLY RETURNS
             // --------------------------------------------------------
+
+            // === Extract market returns ===
+            double rBond = GetBucket2FundReturn(marketReturns[yearIndex]);
+            double rEquity = GetBucket3FundReturn(marketReturns[yearIndex]);
 
             // S1 returns
             double s1B2_before = s1B2;

@@ -10,7 +10,7 @@ public class MomentumEngine : EngineBase, ISimulationEngine
     private readonly IRefillStrategy _strategy = new MomentumRefillStrategy();
     public SimulationResult Run(
         List<PlanRow> plan,
-        List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> marketReturns,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
         Config config,
         bool verbose,
         double csvS1Total,
@@ -123,9 +123,8 @@ public class MomentumEngine : EngineBase, ISimulationEngine
         for (int yearIndex = 0; yearIndex < simYears; yearIndex++)
         {
             var p = plan[yearIndex];
-            var r = usableReturns[yearIndex];
-            double mkt = r.etf6040_realReturn;
-            int calendarYear = r.Year;
+            double mkt = GetSingleFundReturn(usableReturns[yearIndex]);
+            int calendarYear = usableReturns[yearIndex].Year;
 
             List<string> notes = new List<string>();
 
@@ -356,7 +355,7 @@ public class MomentumEngine : EngineBase, ISimulationEngine
             // === REFILL (before returns) note. in first plan year we ALWAYS refill ===
             double actualRefill1 = 0.0;
             double actualRefill2 = 0.0;
-            double mktPrev = (yearIndex == 0) ? 0.01 : usableReturns[yearIndex - 1].etf6040_realReturn;
+            double mktPrev = (yearIndex == 0) ? 0.01 : (usableReturns[yearIndex - 1].EQUITY_RR * .6) + (usableReturns[yearIndex - 1].BONDS_RR * .4);
             if (_strategy.ShouldRefill(mktPrev))
             {
                 var healthForRefillS1 = (yearIndex == 0) ? config.Momentum.CashBufferHealthThreshold + 0.01 : s1H;

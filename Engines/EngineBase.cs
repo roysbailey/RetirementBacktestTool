@@ -17,6 +17,46 @@ public class EngineBase
         CurrentConfig = cfg ?? throw new ArgumentNullException(nameof(cfg));
     }
 
+    protected double GetBucket2FundReturn((int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR) annualMarketReturn)
+    {
+        return ReturnHelper(CurrentConfig.BucketReturns.Bucket2Fund, annualMarketReturn);
+    }
+
+    protected double GetBucket3FundReturn((int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR) annualMarketReturn)
+    {
+        return ReturnHelper(CurrentConfig.BucketReturns.Bucket3Fund, annualMarketReturn);
+    }
+
+    protected double GetSingleFundReturn((int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR) annualMarketReturn)
+    {
+        if (CurrentConfig.BucketReturns.SingleFund == ReturnSource.ETF6040)
+            return (annualMarketReturn.EQUITY_RR * .6) + (annualMarketReturn.BONDS_RR * .4);
+        else
+            return ReturnHelper(CurrentConfig.BucketReturns.SingleFund, annualMarketReturn);
+    }
+
+    private double ReturnHelper(ReturnSource returnSource, (int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR) annualMarketReturn)
+    {
+        switch (returnSource)
+        {
+            case ReturnSource.Equity:
+                return annualMarketReturn.EQUITY_RR;
+
+            case ReturnSource.Bonds:
+                return annualMarketReturn.BONDS_RR;
+
+            case ReturnSource.MMF:
+                return annualMarketReturn.MMF_RR;
+
+            case ReturnSource.CGT:
+                return annualMarketReturn.SythntheticCGT_RR;
+
+            case ReturnSource.BlendedSleeve:
+                return annualMarketReturn.Sythetic404020_RR;
+        }
+
+        return 0.0;
+    }
 
     // ============================================================
     //  FINAL SUMMARY (unchanged)

@@ -98,3 +98,7 @@ coverage/
 # Keep data and config files (e.g. Data/*, config.json) under source control by not adding generic CSV/JSON patterns here.
 *master.json
 *master.csv
+
+# Now we have placeholders in the repo, we can stop tracking local config
+config.json
+Data/sipp-spend-plan.csv

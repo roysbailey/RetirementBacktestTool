@@ -11,7 +11,7 @@ public interface ISimulationEngine
 {
     SimulationResult Run(
         List<PlanRow> plan,
-        List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> marketReturns,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
         Config config,
         bool verbose,
         double csvS1Total,

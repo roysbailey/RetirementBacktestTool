@@ -66,7 +66,7 @@ This makes the spending plan fully configurable and realistic.
 Market returns are read from the **market‑returns CSV file**, which contains:
 
 - **Annual real returns** in all cases (after inflation see https://iamkate.com/data/uk-inflation/)
-- **Global Equity Tracker** data was obtained from here https://curvo.eu/backtest/en/compare-indexes/msci-world-vs-msci-usa?currency=gbp https://curvo.eu/backtest/en/market-index/msci-world?currency=gbp 
+- **Global Equity Tracker** data was obtained from here https://curvo.eu/backtest/en/market-index/msci-world?currency=gbp 
 - **Global Bonds**, as described in the next section, is a synthetic series constructed using a regime‑based model to approximate real bond returns for a global short/intermediate duration allocation in GBP terms.
 - **Global 6040ETF** , as described in the next section, is a synthetic series representing a 60/40 global equity/bond portfolio in real GBP terms.
 - Covering the period **1966–2025**

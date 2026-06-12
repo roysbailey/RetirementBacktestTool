@@ -3,6 +3,7 @@ using SippBucketDrawdown.Shared;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using static System.Formats.Asn1.AsnWriter;
 
 namespace SippBucketDrawdown;
@@ -56,7 +57,8 @@ class Program
         Console.WriteLine("  [4] Momentum Rolling Backtest (all start years)");
         Console.WriteLine("  [5] Time Buckets Rolling Backtest (all start years)");
         Console.WriteLine("  [6] Hybrid Rolling Backtest (all start years)");
-        Console.WriteLine("  [7] Combined Backtest (Momentum vs Time Buckets)");
+        Console.WriteLine("  [7] Combined Backtest (Mom vs 3TB vs Hybrid)");
+        Console.WriteLine("  [8] Hybrid with different defensive 40% (CGT, 404020, Bonds, MMF)");
         Console.WriteLine("Append 'v' for verbose, e.g. '1v' or '3v'.");
 
         string choice = Console.ReadLine()?.Trim().ToLower() ?? "";
@@ -114,6 +116,7 @@ class Program
 
         var options = new JsonSerializerOptions
         {
+            Converters = { new JsonStringEnumConverter() },
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true
@@ -131,6 +134,7 @@ class Program
 
         cfg.Guardrails ??= new GuardrailConfig();
         cfg.Bonus ??= new BonusConfig();
+        cfg.BucketReturns ??= new BucketReturnsConfig();
         cfg.Momentum ??= new MomentumConfig();
         cfg.TimeBuckets ??= new TimeBucketConfig();
         cfg.Hybrid ??= new HybridConfig();   // ⭐ NEW LINE
@@ -143,7 +147,7 @@ class Program
     // ======================================================================
     static void RunRollingBacktest(
         List<PlanRow> plan,
-        List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> marketReturns,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
         Config config,
         ISimulationEngine engine,
         string mode,
@@ -384,7 +388,7 @@ class Program
     // ======================================================================
     static void RunCombinedBacktest(
         List<PlanRow> plan,
-        List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> marketReturns,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
         Config config,
         bool verbose,
         double csvS1Total,
@@ -1026,8 +1030,6 @@ class Program
             printEngine(e3);
         }
 
-
-
         static double Scale(double value, double inMin, double inMax, double outMin, double outMax)
         {
             if (inMax <= inMin) return outMin;
@@ -1236,34 +1238,21 @@ class Program
         //  CSV LOADERS
         // ======================================================================
 
-        static List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> LoadReturns(string path) =>
+        static List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> LoadReturns(string path) =>
         File.ReadAllLines(path)
             .Skip(1)
             .Select(l =>
             {
                 var c = l.Split(',');
                 int year = int.Parse(c[0]);
-                double etf6040_realReturn = (double.Parse(c[2]) * 0.4) + (double.Parse(c[3]) * 0.6);    // Instead of reading value from file, to make comparison easier use the relevant proportions of the "separate funds" and combine
-                double GlobalBonds_realReturn = double.Parse(c[2]);
-                double GlobalTracker_realReturn = double.Parse(c[3]);
-                return (year, etf6040_realReturn, GlobalBonds_realReturn, GlobalTracker_realReturn);
+                double MMF_RR = double.Parse(c[1]);
+                double EQUITY_RR = double.Parse(c[2]);
+                double BONDS_RR = double.Parse(c[3]);
+                double SythntheticCGT_RR = double.Parse(c[4]);
+                double Sythetic404020_RR = double.Parse(c[5]);
+                return (year, MMF_RR, EQUITY_RR, BONDS_RR, SythntheticCGT_RR, Sythetic404020_RR);
             })
             .ToList();
-
-    //static List<(int Year, double etf6040_realReturn, double GlobalBonds_realReturn, double GlobalTracker_realReturn)> LoadReturns(string path) =>
-    //    File.ReadAllLines(path)
-    //        .Skip(1)
-    //        .Select(l =>
-    //        {
-    //            var c = l.Split(',');
-    //            int year = int.Parse(c[0]);
-    //            double etf6040_realReturn = double.Parse(c[1]);       // read from file, whilst this is real data - it makes hybrid comparison tricky!
-    //            double GlobalBonds_realReturn = double.Parse(c[2]);
-    //            double GlobalTracker_realReturn = double.Parse(c[3]);
-    //            return (year, etf6040_realReturn, GlobalBonds_realReturn, GlobalTracker_realReturn);
-    //        })
-    //        .ToList();
-
     static List<PlanRow> LoadPlan(string path) =>
         File.ReadAllLines(path)
             .Skip(1)

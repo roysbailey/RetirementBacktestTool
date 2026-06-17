@@ -14,12 +14,6 @@
     <None Update="config.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="Data\market-returns - master-equity-cgt50-RylLndn35-IGL5_15.csv">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="Data\market-returns - master-equity-global-bonds.csv">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="Data\market-returns.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

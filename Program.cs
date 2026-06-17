@@ -1,5 +1,6 @@
 ﻿using SippBucketDrawdown.Engines;
 using SippBucketDrawdown.Shared;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +20,9 @@ class Program
     // refactored to remove fixed constant values for largestO2EarlyCuts.  Now scores on second pass through data, so all values known before scoring.
     // combined back test output and scoring improved to fix NetOutcome from short duration issues and improved "weighted scoring".
     const string Version = "V5.0.4";
+    static double largestO2EarlyCuts = 0.0;
+    static double largestO3EarlyCuts = 0.0;
+    static double largestTotalEarlyCuts = 0.0;
 
     static void Main()
     {
@@ -82,6 +86,14 @@ class Program
         else if (choice.StartsWith("7"))
         {
             RunCombinedBacktest(
+                plan, returns, config,
+                verbose,
+                csvS1Total, csvS2Total,
+                csvO1Total, csvO2Total, csvO3Total);
+        }
+        else if (choice.StartsWith("8"))
+        {
+            RunHybridCombinedBacktest(
                 plan, returns, config,
                 verbose,
                 csvS1Total, csvS2Total,
@@ -197,57 +209,9 @@ class Program
             if (simYears < 5)
                 continue;
 
-            var tempConfig = new Config
-            {
-                SimulationStartYear = start,
-                Sipp1StartingBalance = config.Sipp1StartingBalance,
-                Sipp2StartingBalance = config.Sipp2StartingBalance,
-
-                SpendPlanFile = config.SpendPlanFile,
-                MarketReturnsFile = config.MarketReturnsFile,
-
-                LiabilityDiscountRate = config.LiabilityDiscountRate,
-
-                Guardrails = new GuardrailConfig
-                {
-                    Tier4Threshold = config.Guardrails.Tier4Threshold,
-                    Tier3Threshold = config.Guardrails.Tier3Threshold,
-                    Tier2Threshold = config.Guardrails.Tier2Threshold,
-                    Tier1Threshold = config.Guardrails.Tier1Threshold
-                },
-
-                Bonus = new BonusConfig
-                {
-                    StartThreshold = config.Bonus.StartThreshold,
-                    Tier2Threshold = config.Bonus.Tier2Threshold,
-                    Tier3Threshold = config.Bonus.Tier3Threshold,
-                    Tier4Threshold = config.Bonus.Tier4Threshold,
-                    Tier5Threshold = config.Bonus.Tier5Threshold,
-
-                    PctTier1 = config.Bonus.PctTier1,
-                    PctTier2 = config.Bonus.PctTier2,
-                    PctTier3 = config.Bonus.PctTier3,
-                    PctTier4 = config.Bonus.PctTier4,
-                    PctTier5 = config.Bonus.PctTier5
-                },
-
-                Momentum = new MomentumConfig
-                {
-                    CashBufferYearsHighHealth = config.Momentum.CashBufferYearsHighHealth,
-                    CashBufferYearsLowHealth = config.Momentum.CashBufferYearsLowHealth,
-                    CashBufferHealthThreshold = config.Momentum.CashBufferHealthThreshold
-                },
-
-                TimeBuckets = new TimeBucketConfig
-                {
-                    Bucket1Years = config.TimeBuckets.Bucket1Years,
-                    Bucket2Years = config.TimeBuckets.Bucket2Years,
-
-                    FundingStateExtremeBadThreshold = config.TimeBuckets.FundingStateExtremeBadThreshold,
-                    FundingStateBadThreshold = config.TimeBuckets.FundingStateBadThreshold,
-                    FundingStateGoodThreshold = config.TimeBuckets.FundingStateGoodThreshold
-                }
-            };
+            var tempConfig = DuplicateConfig(config);
+            EngineBase.SetConfig(tempConfig);
+            tempConfig.SimulationStartYear = start;
 
             var result = engine.Run(
                 plan, marketReturns,
@@ -614,13 +578,13 @@ class Program
         }
 
         // Now we have all the calculations, we can identify the early cuts (first 10 years) across all sim years which is used in scoring
-        double largestO2EarlyCuts = rows.Max(r =>
+        largestO2EarlyCuts = rows.Max(r =>
             new[] { r.Mom, r.Time, r.Hyb }.Max(x => x.EarlyO2Cuts));
 
-        double largestO3EarlyCuts = rows.Max(r =>
+        largestO3EarlyCuts = rows.Max(r =>
             new[] { r.Mom, r.Time, r.Hyb }.Max(x => x.EarlyO3Cuts));
 
-        double largestTotalEarlyCuts = rows.Max(r =>
+        largestTotalEarlyCuts = rows.Max(r =>
             new[] { r.Mom, r.Time, r.Hyb }
                 .Max(x => x.EarlyO2Cuts + x.EarlyO3Cuts));
 
@@ -829,6 +793,39 @@ class Program
             .ToList();
         var yearsString = string.Join(Environment.NewLine, worstFirst10OrderedYears30YearsMin.Select(x => x.StartYear));
 
+// 10 year performance, best to worst
+//1979
+//1980
+//1981
+//1982
+//1983
+//1984
+//1985
+//1986
+//1988
+//1989
+//1990
+//1991
+//1992
+//1993
+//1994
+//1995
+//1978
+//1987
+//1996
+//1975
+//1966
+//1967
+//1976
+//1977
+//1968
+//1971
+//1969
+//1970
+//1972
+//1974
+//1973
+
         // == Now work out groups for "bad, normal and good" regime scoring.
         int regimeSize = Math.Min(3, regimeOrderedYears30YearsMin.Count / 3);
 
@@ -953,23 +950,8 @@ class Program
         string goodTitle =
             $"GOOD ({string.Join(", ", goodYears.Select(x => x.StartYear))})";
 
-        // Simple reason helper
-        string BuildReason(List<SimulationResult> sims)
-        {
-            double avgScore = sims.Average(x => x.Score.ScoreValue);
-            double avgO1 = sims.Average(x => x.O1Pct);
-            double avgO2 = sims.Average(x => x.O2Pct);
-            double avgO3 = sims.Average(x => x.O3Pct);
-            double avgNet = sims.Average(x => x.NetOutcome);
-
-            return
-                $"• Avg Weighted YearScore: {avgScore:F1}\n" +
-                $"• Avg O1/O2/O3: {avgO1:P1}, {avgO2:P1}, {avgO3:P1}\n" +
-                $"• Avg NetOutcome: £{avgNet:N0}";
-        }
-
         // === THREE TABLES ===
-        PrintRegimeTable3(
+        PrintRegimeTable4(
             badTitle,
             ("Momentum",
                 AvgScore(momBadYearSims),
@@ -981,7 +963,7 @@ class Program
                 AvgScore(hybBadYearSims),
                 BuildReason(hybBadYearSims)));
 
-        PrintRegimeTable3(
+        PrintRegimeTable4(
             normalTitle,
             ("Momentum",
                 AvgScore(momNormalYearSims),
@@ -993,7 +975,7 @@ class Program
                 AvgScore(hybNormalYearSims),
                 BuildReason(hybNormalYearSims)));
 
-        PrintRegimeTable3(
+        PrintRegimeTable4(
             goodTitle,
             ("Momentum",
                 AvgScore(momGoodYearSims),
@@ -1004,14 +986,612 @@ class Program
             ("Hybrid",
                 AvgScore(hybGoodYearSims),
                 BuildReason(hybGoodYearSims)));
+    }
 
-        // ---- local helpers for regime printing & reasons ----
+    // ======================================================================
+    //  HYBRID COMBINED BACKTEST (Bonds vs CGT vs MMF vs 404020) — OPTION 8
+    // ======================================================================
+    static void RunHybridCombinedBacktest(
+        List<PlanRow> plan,
+        List<(int Year, double MMF_RR, double EQUITY_RR, double BONDS_RR, double SythntheticCGT_RR, double Sythetic404020_RR)> marketReturns,
+        Config config,
+        bool verbose,
+        double csvS1Total,
+        double csvS2Total,
+        double csvO1Total,
+        double csvO2Total,
+        double csvO3Total)
+    {
+        Console.WriteLine("\n=== HYBRID COMBINED BACKTEST (CGT vs 40420 vs bond vs MMF) ===");
 
-        static void PrintRegimeTable3(
+        Console.WriteLine("EndState Classification Rules:");
+        Console.WriteLine("  PerfectPass : Survived full horizon, O1>=95%, O2>=80%, O3>=70%, NetOutcome>=0");
+        Console.WriteLine("  Pass        : Survived full horizon, O1>=85%,  O2>=50%, O3>=30%, NetOutcome>=0");
+        Console.WriteLine("  Fail        : Survived (but did not meet PASS thresholds) or depleted late (>=80% horizon)\r\n");
+        Console.WriteLine("  BadFail     : Depletion before 80% of horizon OR O1<70%");
+        Console.WriteLine();
+
+        int fullPlanYears = plan.Count;
+
+        var hybridEngine = new Hybrid3BucketEngine();
+
+        var rows = new List<(SimulationResult Bonds, SimulationResult MMF, SimulationResult CGT, SimulationResult blended404020)>();
+
+        // Weighted aggregates for Bonds
+        double BondPerfect = 0, bondPass = 0, bondFail = 0, bondBad = 0;
+        double bondNetOutcomeSum = 0;
+        double BondNegNetOutcome = 0;
+        double bondO1PctSum = 0, bondO2PctSum = 0, bondO3PctSum = 0;
+        double bondBonusSum = 0;
+
+        // Weighted aggregates for MMF
+        double mmfPerfect = 0, mmfPass = 0, mmfFail = 0, mmfBad = 0;
+        double mmfNetOutcomeSum = 0;
+        double mmfNegNetOutcome = 0;
+        double mmfO1PctSum = 0, mmfO2PctSum = 0, mmfO3PctSum = 0;
+        double mmfBonusSum = 0;
+
+        // Weighted aggregates for CGT
+        double cgtPerfect = 0, cgtPass = 0, cgtFail = 0, cgtBad = 0;
+        double cgtNetOutcomeSum = 0;
+        double cgtNegNetOutcome = 0;
+        double cgtO1PctSum = 0, cgtO2PctSum = 0, cgtO3PctSum = 0;
+        double cgtBonusSum = 0;
+
+        // Weighted aggregates for blend404020
+        double blend404020Perfect = 0, blend404020Pass = 0, blend404020Fail = 0, blend404020Bad = 0;
+        double blend404020NetOutcomeSum = 0;
+        double blend404020NegNetOutcome = 0;
+        double blend404020O1PctSum = 0, blend404020O2PctSum = 0, blend404020O3PctSum = 0;
+        double blend404020BonusSum = 0;
+
+        double totalWeight = 0;
+        bool printedShortHeader = false;
+
+        Dictionary<int, SimulationResult> bondByYear = new();
+        Dictionary<int, SimulationResult> mmfByYear = new();
+        Dictionary<int, SimulationResult> cgtByYear = new();
+        Dictionary<int, SimulationResult> blend404020ByYear = new();
+
+        foreach (var start in marketReturns.Select(r => r.Year))
+        {
+            int idx = marketReturns.FindIndex(r => r.Year == start);
+            if (idx < 0) continue;
+
+            var usable = marketReturns.Skip(idx).ToList();
+            int simYears = Math.Min(plan.Count, usable.Count);
+
+            if (simYears < 5)
+                continue;
+
+            // Weighting factor
+            double weight = (double)simYears / fullPlanYears;
+            totalWeight += weight;
+
+            // Separator row when dropping below 30 years
+            if (simYears < 30 && !printedShortHeader)
+            {
+                Console.WriteLine("\n----- SHORT SIMULATIONS BEGIN BELOW THIS POINT (WEIGHTED LESS IN SUMMARY) -----\n");
+                printedShortHeader = true;
+            }
+
+
+            // Bonds
+            var tempConfig = DuplicateConfig(config);
+            EngineBase.SetConfig(tempConfig);
+            tempConfig.SimulationStartYear = start;
+
+            tempConfig.BucketReturns.Bucket2Fund = ReturnSource.Bonds;
+            var bondOutcome = hybridEngine.Run(
+                plan, marketReturns,
+                tempConfig,
+                verbose: false,
+                csvS1Total, csvS2Total,
+                csvO1Total, csvO2Total, csvO3Total,
+                printSummary: false);
+
+            bondByYear[start] = bondOutcome;
+
+            tempConfig.BucketReturns.Bucket2Fund = ReturnSource.MMF;
+            var mmfOutcome = hybridEngine.Run(
+                plan, marketReturns,
+                tempConfig,
+                verbose: false,
+                csvS1Total, csvS2Total,
+                csvO1Total, csvO2Total, csvO3Total,
+                printSummary: false);
+
+            mmfByYear[start] = mmfOutcome;
+
+            tempConfig.BucketReturns.Bucket2Fund = ReturnSource.CGT;
+            var cgtOutcome = hybridEngine.Run(
+                plan, marketReturns,
+                tempConfig,
+                verbose: false,
+                csvS1Total, csvS2Total,
+                csvO1Total, csvO2Total, csvO3Total,
+                printSummary: false);
+
+            cgtByYear[start] = cgtOutcome;
+
+            tempConfig.BucketReturns.Bucket2Fund = ReturnSource.BlendedSleeve;
+            var blendedOutcome = hybridEngine.Run(
+                plan, marketReturns,
+                tempConfig,
+                verbose: false,
+                csvS1Total, csvS2Total,
+                csvO1Total, csvO2Total, csvO3Total,
+                printSummary: false);
+
+            blend404020ByYear[start] = blendedOutcome;
+
+
+            rows.Add((bondOutcome, mmfOutcome, cgtOutcome, blendedOutcome));
+
+            // Weighted Bonds stats
+            switch (bondOutcome.EndState)
+            {
+                case EndState.PerfectPass: BondPerfect += weight; break;
+                case EndState.Pass: bondPass += weight; break;
+                case EndState.Fail: bondFail += weight; break;
+                case EndState.BadFail: bondBad += weight; break;
+            }
+
+            bondNetOutcomeSum += bondOutcome.NetOutcome * weight;
+            if (bondOutcome.NetOutcome < 0) BondNegNetOutcome += weight;
+            bondO1PctSum += bondOutcome.O1Pct * weight;
+            bondO2PctSum += bondOutcome.O2Pct * weight;
+            bondO3PctSum += bondOutcome.O3Pct * weight;
+            bondBonusSum += bondOutcome.Bonus * weight;
+
+            // Weighted MMF stats
+            switch (mmfOutcome.EndState)
+            {
+                case EndState.PerfectPass: mmfPerfect += weight; break;
+                case EndState.Pass: mmfPass += weight; break;
+                case EndState.Fail: mmfFail += weight; break;
+                case EndState.BadFail: mmfBad += weight; break;
+            }
+
+            mmfNetOutcomeSum += mmfOutcome.NetOutcome * weight;
+            if (mmfOutcome.NetOutcome < 0) mmfNegNetOutcome += weight;
+            mmfO1PctSum += mmfOutcome.O1Pct * weight;
+            mmfO2PctSum += mmfOutcome.O2Pct * weight;
+            mmfO3PctSum += mmfOutcome.O3Pct * weight;
+            mmfBonusSum += mmfOutcome.Bonus * weight;
+
+            // Weighted CGT stats
+            switch (cgtOutcome.EndState)
+            {
+                case EndState.PerfectPass: cgtPerfect += weight; break;
+                case EndState.Pass: cgtPass += weight; break;
+                case EndState.Fail: cgtFail += weight; break;
+                case EndState.BadFail: cgtBad += weight; break;
+            }
+
+            cgtNetOutcomeSum += cgtOutcome.NetOutcome * weight;
+            if (cgtOutcome.NetOutcome < 0) cgtNegNetOutcome += weight;
+            cgtO1PctSum += cgtOutcome.O1Pct * weight;
+            cgtO2PctSum += cgtOutcome.O2Pct * weight;
+            cgtO3PctSum += cgtOutcome.O3Pct * weight;
+            cgtBonusSum += cgtOutcome.Bonus * weight;
+
+            // Weighted Blended stats
+            switch (blendedOutcome.EndState)
+            {
+                case EndState.PerfectPass: blend404020Perfect += weight; break;
+                case EndState.Pass: blend404020Pass += weight; break;
+                case EndState.Fail: blend404020Fail += weight; break;
+                case EndState.BadFail: blend404020Bad += weight; break;
+            }
+
+            blend404020NetOutcomeSum += blendedOutcome.NetOutcome * weight;
+            if (blendedOutcome.NetOutcome < 0) blend404020NegNetOutcome += weight;
+            blend404020O1PctSum += blendedOutcome.O1Pct * weight;
+            blend404020O2PctSum += blendedOutcome.O2Pct * weight;
+            blend404020O3PctSum += blendedOutcome.O3Pct * weight;
+            blend404020BonusSum += blendedOutcome.Bonus * weight;
+        }
+
+        if (rows.Count == 0)
+        {
+            Console.WriteLine("No valid runs for combined backtest.");
+            return;
+        }
+
+        // Now we have all the calculations, we can identify the early cuts (first 10 years) across all sim years which is used in scoring
+        largestO2EarlyCuts = rows.Max(r =>
+            new[] { r.Bonds, r.MMF, r.CGT, r.blended404020}.Max(x => x.EarlyO2Cuts));
+
+        largestO3EarlyCuts = rows.Max(r =>
+            new[] { r.Bonds, r.MMF, r.CGT, r.blended404020 }.Max(x => x.EarlyO3Cuts));
+
+        largestTotalEarlyCuts = rows.Max(r =>
+            new[] { r.Bonds, r.MMF, r.CGT, r.blended404020 }
+                .Max(x => x.EarlyO2Cuts + x.EarlyO3Cuts));
+
+        // === PRINT TABLE ===
+        Console.WriteLine("\n=== COMBINED BACKTEST OUTCOME TABLE ===");
+        Console.WriteLine("StartYear | SimYears | Bond_O1% | MMF_O1% | CGT_O1% | Blend_O1% | Bond_O2% | MMF_O2% | CGT_O2% | Blend_O2% | Bond_O3% | MMF_O3% | CGT_O3% | Blend_O3% | Mom_NetOutcome | Time_NetOutcome | Hyb_NetOutcome | Mom_Bonus  | Time_Bonus | Hyb_Bonus | Mom_EndState | Time_EndState | Hyb_EndState | BestInYear");
+        Console.WriteLine("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
+
+        bool separatorPrinted2 = false;
+
+        // FIX FROM HERE!
+        foreach (var row in rows.OrderByDescending(r => r.Bonds.SimYears))
+        {
+            var b = row.Bonds;
+            var m = row.MMF;
+            var c = row.CGT;
+            var bl = row.blended404020;
+
+            var bestNet = new[] { b, m, c, bl }.OrderByDescending(r => r.NetOutcome).First();
+            b.Score = ScoreSimulationOutcome(fullPlanYears, b, bestNet);
+            m.Score = ScoreSimulationOutcome(fullPlanYears, m, bestNet);
+            c.Score = ScoreSimulationOutcome(fullPlanYears, c, bestNet);
+            bl.Score = ScoreSimulationOutcome(fullPlanYears, bl, bestNet);
+
+            var bestInYear = new[]
+{
+                ("Bonds", b),
+                ("MMF", m),
+                ("CGT", c),
+                ("Blended", bl)
+            }.OrderByDescending(x => x.Item2.Score.ScoreValue)
+             .First().Item1;
+
+            // Print separator exactly when we cross below 30 years
+            if (!separatorPrinted2 && m.SimYears < 30)
+            {
+                Console.WriteLine("\n----- SHORT SIMULATIONS BEGIN BELOW THIS POINT (WEIGHTED LESS IN SUMMARY) -----\n");
+                separatorPrinted2 = true;
+            }
+
+            Console.WriteLine(
+                $"{b.StartYear,9} | {b.SimYears,8} | " +
+                $"{b.O1Pct,6:P1} | {m.O1Pct,8:P1} | {c.O1Pct,7:P1} | {bl.O1Pct,7:P1} | " +
+                $"{b.O2Pct,6:P1} | {m.O2Pct,8:P1} | {c.O2Pct,7:P1} | {bl.O2Pct,7:P1} | " +
+                $"{b.O3Pct,6:P1} | {m.O3Pct,8:P1} | {c.O3Pct,7:P1} | {bl.O3Pct,7:P1} | " +
+                $"£{b.NetOutcome,13:N0} | £{m.NetOutcome,14:N0} | £{c.NetOutcome,13:N0} | " +
+                $"£{b.Bonus,9:N0} | £{m.Bonus,10:N0} | £{c.Bonus,9:N0} | " +
+                $"{b.EndState,12} | {m.EndState,13} | {c.EndState,12} | {bestInYear}");
+        }
+
+        var regimeOrderedYears30YearsMin =
+            bondByYear.Keys
+                .Where(y =>
+                    mmfByYear.ContainsKey(y) &&
+                    cgtByYear.ContainsKey(y) &&
+                    blend404020ByYear.ContainsKey(y) &&
+
+                    // We do not trust any sims that run for less than 30 years!
+                    bondByYear[y].SimYears >= 30 &&
+                    mmfByYear[y].SimYears >= 30 &&
+                    cgtByYear[y].SimYears >= 30 &&
+                    blend404020ByYear[y].SimYears >= 30
+                )
+                .Select(y => new
+                {
+                    StartYear = y,
+                    AverageNetOutcome30 =
+                        (bondByYear[y].NetOutcome30 +
+                         mmfByYear[y].NetOutcome30 +
+                         cgtByYear[y].NetOutcome30 +
+                         blend404020ByYear[y].NetOutcome30) / 4.0,
+
+                    Bond = bondByYear[y],
+                    MMF = mmfByYear[y],
+                    CGT = cgtByYear[y],
+                    Blended = blend404020ByYear[y]
+                })
+                .OrderBy(x => x.AverageNetOutcome30)
+                .ToList();
+
+        var worstFirst10OrderedYears30YearsMin =
+        bondByYear.Keys
+            .Where(y =>
+                mmfByYear.ContainsKey(y) &&
+                cgtByYear.ContainsKey(y) &&
+
+                // We do not trust any sims that run for less than 30 years!
+                bondByYear[y].SimYears >= 30 &&
+                mmfByYear[y].SimYears >= 30 &&
+                cgtByYear[y].SimYears >= 30 &&
+                blend404020ByYear[y].SimYears >= 30
+            )
+            .Select(y => new
+            {
+                StartYear = y,
+                AverageWorstTen30 =
+                    ((bondByYear[y].EarlyO2Cuts + bondByYear[y].EarlyO3Cuts) +
+                     (mmfByYear[y].EarlyO2Cuts + mmfByYear[y].EarlyO3Cuts) +
+                     (cgtByYear[y].EarlyO2Cuts + cgtByYear[y].EarlyO3Cuts) +
+                     (blend404020ByYear[y].EarlyO2Cuts + blend404020ByYear[y].EarlyO3Cuts)) / 4.0,
+
+                Bond = bondByYear[y],
+                MMF = mmfByYear[y],
+                CGT = cgtByYear[y],
+                Blended = blend404020ByYear[y]
+            })
+            .OrderBy(x => x.AverageWorstTen30)
+            .ToList();
+        var yearsString = string.Join(Environment.NewLine, worstFirst10OrderedYears30YearsMin.Select(x => x.StartYear));
+
+        // == Now work out groups for "bad, normal and good" regime scoring.
+        int regimeSize = Math.Min(3, regimeOrderedYears30YearsMin.Count / 3);
+
+        // Prevent best and worst years being too close to each other (e.g. 1966 and 1969) which would make the regime scoring less meaningful.
+        const int minYearGap = 5;
+
+        var badYears = SelectSpacedYears(
+            regimeOrderedYears30YearsMin,
+            regimeSize,
+            x => x.StartYear,
+            minYearGap);
+
+        var goodYears = SelectSpacedYears(
+            regimeOrderedYears30YearsMin.AsEnumerable().Reverse(),
+            regimeSize,
+            x => x.StartYear,
+            minYearGap);
+
+        var normalYears = regimeOrderedYears30YearsMin
+            .Skip((regimeOrderedYears30YearsMin.Count / 2) - (regimeSize / 2))
+            .Take(regimeSize)
+            .ToList();
+
+        var allNormalYears = regimeOrderedYears30YearsMin
+            .Skip(regimeSize)
+            .Take(regimeOrderedYears30YearsMin.Count - (regimeSize * 2))
+            .ToList();
+
+        // Collect regime simulations
+        var bondBadYearSims = badYears.Select(x => x.Bond).ToList();
+        var mmfBadYearSims = badYears.Select(x => x.MMF).ToList();
+        var cgtBadYearSims = badYears.Select(x => x.CGT).ToList();
+        var blendedBadYearSims = badYears.Select(x => x.Blended).ToList();
+
+        var bondNormalYearSims = normalYears.Select(x => x.Bond).ToList();
+        var mmfNormalYearSims = normalYears.Select(x => x.MMF).ToList();
+        var cgtNormalYearSims = normalYears.Select(x => x.CGT).ToList();
+        var blendedNormalYearSims = normalYears.Select(x => x.Blended).ToList();
+
+        var bondsGoodYearSims = goodYears.Select(x => x.Bond).ToList();
+        var mmfGoodYearSims = goodYears.Select(x => x.MMF).ToList();
+        var cgtGoodYearSims = goodYears.Select(x => x.CGT).ToList();
+        var blendedGoodYearSims = goodYears.Select(x => x.Blended).ToList();
+
+        var bondsAllNormalYearSims = allNormalYears.Select(x => x.Bond).ToList();
+        var mmfAllNormalYearSims = allNormalYears.Select(x => x.MMF).ToList();
+        var cgtAllNormalYearSims = allNormalYears.Select(x => x.CGT).ToList();
+        var blendedAllNormalYearSims = allNormalYears.Select(x => x.Blended).ToList();
+
+
+        double bondsOverall =
+            WeightedAverageScore(
+                bondBadYearSims,
+                bondsAllNormalYearSims,
+                bondsGoodYearSims);
+
+        double mmfOverall =
+            WeightedAverageScore(
+                mmfBadYearSims,
+                mmfAllNormalYearSims,
+                mmfGoodYearSims);
+
+        double cgtOverall =
+            WeightedAverageScore(
+                cgtBadYearSims,
+                cgtAllNormalYearSims,
+                cgtGoodYearSims);
+
+        double blendedOverall =
+            WeightedAverageScore(
+                blendedBadYearSims,
+                blendedAllNormalYearSims,
+                blendedGoodYearSims);
+
+
+        var overallResults = new[]
+        {
+            ("Bonds", bondsOverall),
+            ("MMF", mmfOverall),
+            ("CGT", cgtOverall),
+            ("Blended", blendedOverall)
+        }
+        .OrderByDescending(x => x.Item2)
+        .ToList();
+
+        var overallWinner = overallResults.First();
+
+        Console.WriteLine("\n=== OVERALL WINNER (Regime Weighted) ===");
+        Console.WriteLine(
+            $"Best Overall Strategy: {overallWinner.Item1} " +
+            $"(Score: {overallWinner.Item2:F2})");
+
+        Console.WriteLine();
+        Console.WriteLine("Rank | Strategy      | Score");
+        Console.WriteLine("--------------------------------");
+
+        for (int i = 0; i < overallResults.Count; i++)
+        {
+            var r = overallResults[i];
+
+            Console.WriteLine(
+                $"{i + 1,4} | {r.Item1,-13} | {r.Item2,5:F2}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Scoring approach:");
+        Console.WriteLine("  • Avg bad year score weighted x1.25");
+        Console.WriteLine("  • Avg years excl. good / bad outliers weighted x1.00");
+        Console.WriteLine("  • Avg good years weighted x1.1");
+        Console.WriteLine("  • Based on YearScore averages within each regime");
+
+        Console.WriteLine("\n=== MARKET REGIME SCORING (Bob & Brenda view) ===");
+
+        // Average YearScore by regime
+        // We use unwighted scores here so everyting scales back up to the "same levels of value"
+        double AvgScore(List<SimulationResult> sims) =>
+            sims.Average(x => x.Score.ScoreValueUnWheighted);
+
+        // Dynamic titles
+        string badTitle =
+            $"BAD ({string.Join(", ", badYears.Select(x => x.StartYear))})";
+
+        string normalTitle =
+            $"NORMAL ({string.Join(", ", normalYears.Select(x => x.StartYear))})";
+
+        string goodTitle =
+            $"GOOD ({string.Join(", ", goodYears.Select(x => x.StartYear))})";
+
+
+        // === THREE TABLES ===
+        PrintRegimeTable4(
+            badTitle,
+            ("Bonds",
+                AvgScore(bondBadYearSims),
+                BuildReason(bondBadYearSims)),
+            ("MMF",
+                AvgScore(mmfBadYearSims),
+                BuildReason(mmfBadYearSims)),
+            ("CGT",
+                AvgScore(cgtBadYearSims),
+                BuildReason(cgtBadYearSims)),
+            ("Blended",
+                AvgScore(blendedBadYearSims),
+                BuildReason(blendedBadYearSims)));
+
+        PrintRegimeTable4(
+            normalTitle,
+            ("Bonds",
+                AvgScore(bondNormalYearSims),
+                BuildReason(bondNormalYearSims)),
+            ("MMF",
+                AvgScore(mmfNormalYearSims),
+                BuildReason(mmfNormalYearSims)),
+            ("CGT",
+                AvgScore(cgtNormalYearSims),
+                BuildReason(cgtNormalYearSims)),
+            ("Blended",
+                AvgScore(blendedNormalYearSims),
+                BuildReason(blendedNormalYearSims)));
+
+        PrintRegimeTable4(
+            goodTitle,
+            ("Bonds",
+                AvgScore(bondsGoodYearSims),
+                BuildReason(bondsGoodYearSims)),
+            ("MMF",
+                AvgScore(mmfGoodYearSims),
+                BuildReason(mmfGoodYearSims)),
+            ("CGT",
+                AvgScore(cgtGoodYearSims),
+                BuildReason(cgtGoodYearSims)),
+            ("Blended",
+                AvgScore(blendedGoodYearSims),
+                BuildReason(blendedGoodYearSims)));
+    }
+
+    // ---- local helpers for regime printing & reasons ----
+
+    public static Config DuplicateConfig(Config config)
+    {
+        var tempConfig = new Config
+        {
+            SimulationStartYear = config.SimulationStartYear,
+            Sipp1StartingBalance = config.Sipp1StartingBalance,
+            Sipp2StartingBalance = config.Sipp2StartingBalance,
+
+            SpendPlanFile = config.SpendPlanFile,
+            MarketReturnsFile = config.MarketReturnsFile,
+
+            LiabilityDiscountRate = config.LiabilityDiscountRate,
+
+            BucketReturns = new BucketReturnsConfig
+            {
+                Bucket2Fund = config.BucketReturns.Bucket2Fund,
+                Bucket3Fund = config.BucketReturns.Bucket3Fund,
+                SingleFund = config.BucketReturns.SingleFund
+            },
+
+
+            Guardrails = new GuardrailConfig
+            {
+                Tier4Threshold = config.Guardrails.Tier4Threshold,
+                Tier3Threshold = config.Guardrails.Tier3Threshold,
+                Tier2Threshold = config.Guardrails.Tier2Threshold,
+                Tier1Threshold = config.Guardrails.Tier1Threshold
+            },
+
+            Bonus = new BonusConfig
+            {
+                StartThreshold = config.Bonus.StartThreshold,
+                Tier2Threshold = config.Bonus.Tier2Threshold,
+                Tier3Threshold = config.Bonus.Tier3Threshold,
+                Tier4Threshold = config.Bonus.Tier4Threshold,
+                Tier5Threshold = config.Bonus.Tier5Threshold,
+
+                PctTier1 = config.Bonus.PctTier1,
+                PctTier2 = config.Bonus.PctTier2,
+                PctTier3 = config.Bonus.PctTier3,
+                PctTier4 = config.Bonus.PctTier4,
+                PctTier5 = config.Bonus.PctTier5
+            },
+
+            Momentum = new MomentumConfig
+            {
+                CashBufferYearsHighHealth = config.Momentum.CashBufferYearsHighHealth,
+                CashBufferYearsLowHealth = config.Momentum.CashBufferYearsLowHealth,
+                CashBufferHealthThreshold = config.Momentum.CashBufferHealthThreshold
+            },
+
+            TimeBuckets = new TimeBucketConfig
+            {
+                Bucket1Years = config.TimeBuckets.Bucket1Years,
+                Bucket2Years = config.TimeBuckets.Bucket2Years,
+
+                FundingStateExtremeBadThreshold = config.TimeBuckets.FundingStateExtremeBadThreshold,
+                FundingStateBadThreshold = config.TimeBuckets.FundingStateBadThreshold,
+                FundingStateGoodThreshold = config.TimeBuckets.FundingStateGoodThreshold
+            },
+
+            Hybrid = new HybridConfig
+            {
+                AllocationB2 = config.Hybrid.AllocationB2,
+                AllocationB3 = config.Hybrid.AllocationB3,
+                B2HealthDiscountAdjustment = config.Hybrid.B2HealthDiscountAdjustment,
+                B3HealthDiscountAdjustment = config.Hybrid.B3HealthDiscountAdjustment,
+                B2HealthGoodThreshold = config.Hybrid.B2HealthGoodThreshold,
+                B3HealthGoodThreshold = config.Hybrid.B3HealthGoodThreshold
+            }
+        };
+
+        return tempConfig;
+    }
+
+    // Simple reason helper
+    static string BuildReason(List<SimulationResult> sims)
+    {
+        double avgScore = sims.Average(x => x.Score.ScoreValue);
+        double avgO1 = sims.Average(x => x.O1Pct);
+        double avgO2 = sims.Average(x => x.O2Pct);
+        double avgO3 = sims.Average(x => x.O3Pct);
+        double avgNet = sims.Average(x => x.NetOutcome);
+
+        return
+            $"• Avg Weighted YearScore: {avgScore:F1}\n" +
+            $"• Avg O1/O2/O3: {avgO1:P1}, {avgO2:P1}, {avgO3:P1}\n" +
+            $"• Avg NetOutcome: £{avgNet:N0}";
+    }
+
+
+    static void PrintRegimeTable4(
             string title,
             (string Name, double Score, string Reason) e1,
             (string Name, double Score, string Reason) e2,
-            (string Name, double Score, string Reason) e3)
+            (string Name, double Score, string Reason) e3,
+            (string Name, double Score, string Reason) e4 = default)
         {
             Console.WriteLine($"\n=== {title} REGIME ===");
             Console.WriteLine("Engine       | Score (unweighted) | Reason");
@@ -1028,7 +1608,9 @@ class Program
             printEngine(e1);
             printEngine(e2);
             printEngine(e3);
-        }
+            if (e4.Name != null)
+                printEngine(e4);
+    }
 
         static double Scale(double value, double inMin, double inMax, double outMin, double outMax)
         {
@@ -1038,7 +1620,7 @@ class Program
             return outMin + t * (outMax - outMin);
         }
 
-        double WeightedAverageScore(
+        static double WeightedAverageScore(
             List<SimulationResult> bad,
             List<SimulationResult> normal,
             List<SimulationResult> good)
@@ -1059,7 +1641,7 @@ class Program
         }
 
 
-        SimulationResult.YearScore ScoreSimulationOutcome(
+        static SimulationResult.YearScore ScoreSimulationOutcome(
             int fullPlanYears,
             SimulationResult me,
             SimulationResult bestNetOutcomeThisYear)
@@ -1232,8 +1814,7 @@ class Program
             return yearScore;
         }
 
-    }
-        
+       
         // ======================================================================
         //  CSV LOADERS
         // ======================================================================
